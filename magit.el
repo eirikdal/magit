@@ -672,6 +672,9 @@ operation after commit).")
 (defvar magit-omit-untracked-dir-contents nil
   "When non-nil magit will only list an untracked directory, not its contents.")
 
+(defvar magit-omit-assumed-dir-contents nil
+  "When non-nil magit will only list an assumed directory, not its contents.")
+
 (defvar magit-tmp-buffer-name " *magit-tmp*")
 
 (defvar magit-read-file-hist nil)
@@ -2371,6 +2374,7 @@ magit-topgit and magit-svn"
 (magit-define-section-jumper unstaged  "Unstaged changes")
 (magit-define-section-jumper staged    "Staged changes")
 (magit-define-section-jumper unpushed  "Unpushed commits")
+(magit-define-section-jumper assumed   "Assumed files")
 
 (magit-define-level-shower 1)
 (magit-define-level-shower 2)
@@ -2674,6 +2678,32 @@ in the corresponding directories."
              ,@(when magit-omit-untracked-dir-contents
                  '("--directory"))))))
 
+;;; Assumed files
+
+(defun magit-wash-assumed-file ()
+  (if (looking-at "^? \\(.*\\)$")
+      (let ((file (match-string-no-properties 1)))
+        (delete-region (point) (+ (line-end-position) 1))
+        (magit-with-section file 'file
+          (magit-set-section-info file)
+          (insert "\t" file "\n"))
+        t)
+    nil))
+
+(defun magit-wash-assumed-files ()
+  (let ((magit-old-top-section nil))
+    (magit-wash-sequence #'magit-wash-assumed-file)))
+
+(defun magit-insert-assumed-files ()
+  (unless (string= (magit-get "status" "showAssumedFiles") "no")
+    (apply 'magit-git-section
+           `(assumed
+             "Assumed files:"
+             magit-wash-assumed-files
+             "ls-files" "-v" "--exclude-standard"
+             ,@(when magit-omit-assumed-dir-contents
+                 '("--directory"))))))
+
 ;;; Diffs and Hunks
 
 (defvar magit-diff-context-lines 3)
@@ -2778,6 +2808,8 @@ Customize `magit-diff-refine-hunk' to change the default mode."
                                 file file2))
                        ((modified)
                         (format "Modified   %s" file))
+                       ((assumed)
+                        (format "Assumed    %s" file))
                        ((typechange)
                         (format "Typechange %s" file))
                        (t
@@ -2960,6 +2992,7 @@ Customize `magit-diff-refine-hunk' to change the default mode."
             (status (case (string-to-char (match-string-no-properties 3))
                       (?A 'new)
                       (?D 'deleted)
+                      (?D 'assumed)
                       (?M 'modified)
                       (?U 'unmerged)
                       (?T 'typechange)
@@ -3742,6 +3775,7 @@ FULLY-QUALIFIED-NAME is non-nil."
         (magit-git-exit-code "update-index" "--refresh")
         (magit-insert-stashes)
         (magit-insert-untracked-files)
+        (magit-insert-assumed-files)
         (magit-insert-pending-changes)
         (magit-insert-pending-commits)
         (magit-insert-unpulled-commits remote remote-branch)
@@ -5719,6 +5753,8 @@ With a prefix argument, visit in other window."
     (require 'dired-x)
     (magit-section-action (item info "dired-jump")
       ((untracked file)
+       (dired-jump other-window (file-truename info)))
+      ((assumed file)
        (dired-jump other-window (file-truename info)))
       ((diff)
        (dired-jump other-window (file-truename (magit-diff-item-file item))))
