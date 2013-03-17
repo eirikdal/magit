@@ -762,6 +762,8 @@ This is calculated from `magit-highlight-indentation'.")
 
 (defvar magit-status-mode-map
   (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-a") 'magit-update-index-assume)
+    (define-key map (kbd "C-c C-u") 'magit-update-index-unassume)
     (define-key map (kbd "s") 'magit-stage-item)
     (define-key map (kbd "S") 'magit-stage-all)
     (define-key map (kbd "u") 'magit-unstage-item)
@@ -2391,6 +2393,8 @@ magit-topgit and magit-svn"
     ["Stage all" magit-stage-all t]
     ["Unstage" magit-unstage-item t]
     ["Unstage all" magit-unstage-all t]
+    ["Assume unchanged" magit-update-index-assume t]
+    ["Unassume unchanged" magit-update-index-unassume t]
     ["Commit" magit-log-edit t]
     ["Add log entry" magit-add-log t]
     ["Tag" magit-tag t]
@@ -2681,14 +2685,18 @@ in the corresponding directories."
 ;;; Assumed files
 
 (defun magit-wash-assumed-file ()
-  (if (looking-at "^? \\(.*\\)$")
+  (setq case-fold-search nil)
+  (if (looking-at "^[h|m] \\(.*\\)$")
       (let ((file (match-string-no-properties 1)))
         (delete-region (point) (+ (line-end-position) 1))
         (magit-with-section file 'file
           (magit-set-section-info file)
           (insert "\t" file "\n"))
-        t)
-    nil))
+        t))
+  (if (looking-at "^[H|M] \\(.*\\)$")
+      (let ((file (match-string-no-properties 1)))
+        (delete-region (point) (+ (line-end-position) 1))
+        t)))
 
 (defun magit-wash-assumed-files ()
   (let ((magit-old-top-section nil))
@@ -2992,8 +3000,9 @@ Customize `magit-diff-refine-hunk' to change the default mode."
             (status (case (string-to-char (match-string-no-properties 3))
                       (?A 'new)
                       (?D 'deleted)
-                      (?D 'assumed)
                       (?M 'modified)
+                      (?h 'assumed)
+                      (?m 'assumed)
                       (?U 'unmerged)
                       (?T 'typechange)
                       (t     nil)))
@@ -3899,8 +3908,29 @@ when asking for user input."
     (when (file-exists-p ".git/MERGE_MSG")
         (magit-log-edit))))
 
-;;; Staging and Unstaging
+(defun magit-update-index-assume  (&optional ask)
+  "Update index at point with --assume-unchanged"
+  (if ask
+      (magit-run-git "update-index --assume-unchanged" (read-file-name "File to assume unchanged: "))
+    (magit-section-action (item info "update-index")
+      ((staged file)
+       (magit-run-git "update-index --assume-unchanged" info))
+      ((unstaged file)
+       (unstaged file)
+       (magit-run-git "update-index --assume-unchanged" info)))))
 
+(defun magit-update-index-unassume  (&optional ask)
+  "Update index at point with --assume-unchanged"
+  (if ask
+      (magit-run-git "update-index --assume-changed" (read-file-name "File to unassume unchanged: "))
+    (magit-section-action (item info "update-index")
+      ((staged file)
+       (magit-run-git "update-index --assume-changed" info))
+      ((unstaged file)
+       (unstaged file)
+       (magit-run-git "update-index --assume-changed" info)))))
+
+;;; Staging and Unstaging
 (defun magit-stage-item (&optional ask)
   "Add the item at point to the staging area.
 If ASK is set, ask for the file name rather than picking the one
@@ -5768,6 +5798,10 @@ With a prefix argument, visit in other window."
 With a prefix argument, visit in other window."
   (interactive "P")
   (magit-section-action (item info "visit-file")
+    ((assumed file)
+     (funcall
+      (if other-window 'find-file-other-window 'find-file)
+      info))
     ((untracked file)
      (funcall
       (if other-window 'find-file-other-window 'find-file)
@@ -5801,6 +5835,8 @@ With a prefix argument, visit in other window."
 With a prefix argument, visit in other window."
   (interactive "P")
   (magit-section-action (item info "visit")
+    ((assumed file)
+     (call-interactively 'magit-visit-file-item))
     ((untracked file)
      (call-interactively 'magit-visit-file-item))
     ((diff)
