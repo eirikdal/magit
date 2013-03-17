@@ -761,8 +761,8 @@ This is calculated from `magit-highlight-indentation'.")
 
 (defvar magit-status-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-a") 'magit-update-index-assume-unchanged)
-    (define-key map (kbd "C-c C-u") 'magit-update-index-no-assume-unchanged)
+    (define-key map (kbd "y") 'magit-update-index-assume-unchanged)
+    (define-key map (kbd "Y") 'magit-update-index-no-assume-unchanged)
     (define-key map (kbd "s") 'magit-stage-item)
     (define-key map (kbd "S") 'magit-stage-all)
     (define-key map (kbd "u") 'magit-unstage-item)
@@ -3909,23 +3909,75 @@ when asking for user input."
 
 (defun magit-update-index-assume-unchanged  (&optional ask)
   "Update index at point with --assume-unchanged"
+  (interactive)
   (if ask
-      (magit-run-git "update-index --assume-unchanged" (read-file-name "File to assume unchanged: "))
+      (magit-run-git "update-index" "--assume-unchanged" (read-file-name "File to assume unchanged: "))
     (magit-section-action (item info "update-index")
-      ((staged file)
-       (magit-run-git "update-index --assume-unchanged" info))
-      ((unstaged file)
-       (magit-run-git "update-index --assume-unchanged" info)))))
+      ((assumed file)
+       (magit-run-git "update-index" "--assume-unchanged" info))
+      ((untracked file)
+       (magit-run-git "update-index" "--assume-unchanged" info))
+      ((untracked)
+       (apply #'magit-run-git "update-index" "--assume-unchanged" "--"
+              (magit-git-lines "ls-files" "--other" "--exclude-standard")))
+      ((unstaged diff hunk)
+       (if (magit-hunk-item-is-conflict-p item)
+           (error (concat "Can't stage individual resolution hunks.  "
+                          "Please stage the whole file.")))
+       (magit-apply-hunk-item item "--cached"))
+      ((unstaged diff)
+       (magit-run-git "update-index" "--assume-unchanged" (magit-diff-item-file item)))
+      ((unstaged)
+       (magit-stage-all))
+      ((diff diff)
+       (save-excursion
+         (magit-goto-parent-section)
+         (magit-update-index-assume-unchanged)))
+      ((diff diff hunk)
+       (save-excursion
+         (magit-goto-parent-section)
+         (magit-goto-parent-section)
+         (magit-update-index-assume-unchanged)))
+      ((hunk)
+       (error "Can't stage this hunk"))
+      ((diff)
+       (error "Can't stage this diff")))))
 
 (defun magit-update-index-no-assume-unchanged (&optional ask)
   "Update index at point with --assume-unchanged"
+  (interactive)
   (if ask
-      (magit-run-git "update-index --no-assume-changed" (read-file-name "File to unassume unchanged: "))
+      (magit-run-git "update-index" "--no-assume-unchanged" (read-file-name "File to unassume unchanged: "))
     (magit-section-action (item info "update-index")
-      ((staged file)
-       (magit-run-git "update-index --no-assume-changed" info))
-      ((unstaged file)
-       (magit-run-git "update-index --no-assume-changed" info)))))
+      ((assumed file)
+       (magit-run-git "update-index" "--no-assume-unchanged" info))
+      ((untracked file)
+       (magit-run-git "update-index" "--no-assume-unchanged" info))
+      ((untracked)
+       (apply #'magit-run-git "update-index" "--no-assume-unchanged" "--"
+              (magit-git-lines "ls-files" "--other" "--exclude-standard")))
+      ((unstaged diff hunk)
+       (if (magit-hunk-item-is-conflict-p item)
+           (error (concat "Can't stage individual resolution hunks.  "
+                          "Please stage the whole file.")))
+       (magit-apply-hunk-item item "--cached"))
+      ((unstaged diff)
+       (magit-run-git "update-index" "--no-assume-unchanged" (magit-diff-item-file item)))
+      ((unstaged)
+       (magit-stage-all))
+      ((diff diff)
+       (save-excursion
+         (magit-goto-parent-section)
+         (magit-update-index-assume-unchanged)))
+      ((diff diff hunk)
+       (save-excursion
+         (magit-goto-parent-section)
+         (magit-goto-parent-section)
+         (magit-update-index-assume-unchanged)))
+      ((hunk)
+       (error "Can't stage this hunk"))
+      ((diff)
+       (error "Can't stage this diff")))))
 
 ;;; Staging and Unstaging
 (defun magit-stage-item (&optional ask)
