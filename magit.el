@@ -690,7 +690,6 @@ This is calculated from `magit-highlight-indentation'.")
 (defconst magit-version "@GIT_DEV_VERSION@"
   "The version of Magit that you're using.")
 
-
 (defvar magit-mode-map
   (let ((map (make-keymap)))
     (suppress-keymap map t)
@@ -762,8 +761,8 @@ This is calculated from `magit-highlight-indentation'.")
 
 (defvar magit-status-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-a") 'magit-update-index-assume)
-    (define-key map (kbd "C-c C-u") 'magit-update-index-unassume)
+    (define-key map (kbd "C-c C-a") 'magit-update-index-assume-unchanged)
+    (define-key map (kbd "C-c C-u") 'magit-update-index-no-assume-unchanged)
     (define-key map (kbd "s") 'magit-stage-item)
     (define-key map (kbd "S") 'magit-stage-all)
     (define-key map (kbd "u") 'magit-unstage-item)
@@ -2393,8 +2392,8 @@ magit-topgit and magit-svn"
     ["Stage all" magit-stage-all t]
     ["Unstage" magit-unstage-item t]
     ["Unstage all" magit-unstage-all t]
-    ["Assume unchanged" magit-update-index-assume t]
-    ["Unassume unchanged" magit-update-index-unassume t]
+    ["Assume unchanged" magit-update-index-assume-unchanged t]
+    ["Unassume unchanged" magit-update-index-no-assume-unchanged t]
     ["Commit" magit-log-edit t]
     ["Add log entry" magit-add-log t]
     ["Tag" magit-tag t]
@@ -3908,7 +3907,7 @@ when asking for user input."
     (when (file-exists-p ".git/MERGE_MSG")
         (magit-log-edit))))
 
-(defun magit-update-index-assume  (&optional ask)
+(defun magit-update-index-assume-unchanged  (&optional ask)
   "Update index at point with --assume-unchanged"
   (if ask
       (magit-run-git "update-index --assume-unchanged" (read-file-name "File to assume unchanged: "))
@@ -3916,19 +3915,17 @@ when asking for user input."
       ((staged file)
        (magit-run-git "update-index --assume-unchanged" info))
       ((unstaged file)
-       (unstaged file)
        (magit-run-git "update-index --assume-unchanged" info)))))
 
-(defun magit-update-index-unassume  (&optional ask)
+(defun magit-update-index-no-assume-unchanged (&optional ask)
   "Update index at point with --assume-unchanged"
   (if ask
-      (magit-run-git "update-index --assume-changed" (read-file-name "File to unassume unchanged: "))
+      (magit-run-git "update-index --no-assume-changed" (read-file-name "File to unassume unchanged: "))
     (magit-section-action (item info "update-index")
       ((staged file)
-       (magit-run-git "update-index --assume-changed" info))
+       (magit-run-git "update-index --no-assume-changed" info))
       ((unstaged file)
-       (unstaged file)
-       (magit-run-git "update-index --assume-changed" info)))))
+       (magit-run-git "update-index --no-assume-changed" info)))))
 
 ;;; Staging and Unstaging
 (defun magit-stage-item (&optional ask)
