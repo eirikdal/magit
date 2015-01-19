@@ -1,0 +1,4 @@
+[submodule "magit"]
+	path = magit
+	url = https://github.com/eirikdal/magit.git
+	branch = master
